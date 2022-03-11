@@ -1,0 +1,6 @@
+experiments/
+*.pyc
+checkpoints/
+datasets/
+misc/
+*.png
