@@ -82,25 +82,42 @@ def init_weights(net, init_type='kaiming', scale=1, std=0.02):
 # Generator
 def define_G(opt):
     model_opt = opt['model']
-    if model_opt['which_model_G'] == 'ddpm':
-        from .ddpm_modules import diffusion, unet
-    elif model_opt['which_model_G'] == 'sr3':
-        from .sr3_modules import diffusion, unet
-    if ('norm_groups' not in model_opt['unet']) or model_opt['unet']['norm_groups'] is None:
-        model_opt['unet']['norm_groups']=32
-    model = unet.UNet(
-        in_channel=model_opt['unet']['in_channel'],
-        out_channel=model_opt['unet']['out_channel'],
-        norm_groups=model_opt['unet']['norm_groups'],
-        inner_channel=model_opt['unet']['inner_channel'],
-        channel_mults=model_opt['unet']['channel_multiplier'],
-        attn_res=model_opt['unet']['attn_res'],
-        res_blocks=model_opt['unet']['res_blocks'],
-        dropout=model_opt['unet']['dropout'],
+    model_d_opt = opt['model']['model_d']
+    model_D_opt = opt['model']['model_D']
+    if model_opt['which_model_G'] == 'dnd':
+        from .DnD_modules import diffusion, unet
+    else:
+        raise NotImplementedError
+    if ('norm_groups' not in model_d_opt['unet']) or model_d_opt['unet']['norm_groups'] is None:
+        model_d_opt['unet']['norm_groups']=32
+    if ('norm_groups' not in model_D_opt['unet']) or model_D_opt['unet']['norm_groups'] is None:
+        model_D_opt['unet']['norm_groups']=32
+    model_d = unet.UNet(
+        in_channel=model_d_opt['unet']['in_channel'],
+        out_channel=model_d_opt['unet']['out_channel'],
+        norm_groups=model_d_opt['unet']['norm_groups'],
+        inner_channel=model_d_opt['unet']['inner_channel'],
+        channel_mults=model_d_opt['unet']['channel_multiplier'],
+        attn_res=model_d_opt['unet']['attn_res'],
+        res_blocks=model_d_opt['unet']['res_blocks'],
+        dropout=model_d_opt['unet']['dropout'],
         image_size=model_opt['diffusion']['image_size']
     )
+    model_D = unet.UNet(
+        in_channel=model_D_opt['unet']['in_channel'],
+        out_channel=model_D_opt['unet']['out_channel'],
+        norm_groups=model_D_opt['unet']['norm_groups'],
+        inner_channel=model_D_opt['unet']['inner_channel'],
+        channel_mults=model_D_opt['unet']['channel_multiplier'],
+        attn_res=model_D_opt['unet']['attn_res'],
+        res_blocks=model_D_opt['unet']['res_blocks'],
+        dropout=model_D_opt['unet']['dropout'],
+        image_size=model_opt['diffusion']['image_size']
+    )
+
     netG = diffusion.GaussianDiffusion(
-        model,
+        model_d,
+        model_D,
         image_size=model_opt['diffusion']['image_size'],
         channels=model_opt['diffusion']['channels'],
         loss_type='l1',    # L1 or L2

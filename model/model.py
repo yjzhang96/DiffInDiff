@@ -23,6 +23,7 @@ class DDPM(BaseModel):
             opt['model']['beta_schedule']['train'], schedule_phase='train')
         if self.opt['phase'] == 'train':
             self.netG.train()
+            # self.netd.train()
             # find the parameters to optimize
             if opt['model']['finetune_norm']:
                 optim_params = []
@@ -37,7 +38,7 @@ class DDPM(BaseModel):
             else:
                 optim_params = list(self.netG.parameters())
 
-            self.optG = torch.optim.Adam(
+            self.optim = torch.optim.Adam(
                 optim_params, lr=opt['train']["optimizer"]["lr"])
             self.log_dict = OrderedDict()
         self.load_network()
@@ -47,16 +48,19 @@ class DDPM(BaseModel):
         self.data = self.set_device(data)
 
     def optimize_parameters(self):
-        self.optG.zero_grad()
-        l_pix = self.netG(self.data)
+        self.optim.zero_grad()
+        loss_d, loss_D = self.netG(self.data)
         # need to average in multi-gpu
         b, c, h, w = self.data['HQ'].shape
-        l_pix = l_pix.sum()/int(b*c*h*w)
-        l_pix.backward()
-        self.optG.step()
+        loss_d = loss_d.sum()/int(b*c*h*w)
+        loss_D = loss_D.sum()/int(b*c*h*w)
+        loss_tot = loss_d + loss_D
+        loss_tot.backward()
+        self.optim.step()
 
         # set log
-        self.log_dict['l_pix'] = l_pix.item()
+        self.log_dict['loss_d'] = loss_d.item()
+        self.log_dict['loss_D'] = loss_D.item()
 
     def test(self, continous=False):
         self.netG.eval()
@@ -160,7 +164,7 @@ class DDPM(BaseModel):
         # opt
         opt_state = {'epoch': epoch, 'iter': iter_step,
                      'scheduler': None, 'optimizer': None}
-        opt_state['optimizer'] = self.optG.state_dict()
+        opt_state['optimizer'] = self.optim.state_dict()
         torch.save(opt_state, opt_path)
 
         logger.info(
@@ -186,6 +190,6 @@ class DDPM(BaseModel):
                 opt = torch.load(opt_path)
                 logger.info(
                 'Loading optimizer for G [{:s}] ...'.format(load_path))
-                self.optG.load_state_dict(opt['optimizer'])
+                self.optim.load_state_dict(opt['optimizer'])
                 self.begin_step = opt['iter']
                 self.begin_epoch = opt['epoch']
