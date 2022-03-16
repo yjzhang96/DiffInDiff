@@ -291,6 +291,9 @@ class GaussianDiffusion(nn.Module):
             (1 - sqrt_alpha_cumprod**2).sqrt() * noise
         )
 
+    def q_sample_reverse(self, x_noisy, sqrt_alpha_cumprod, noise_recon=None):
+        return (x_noisy - (1 - sqrt_alpha_cumprod**2).sqrt() * noise_recon) * (1/sqrt_alpha_cumprod) 
+
     def p_losses(self, x_in, noise=None):
         y_start = x_in['HQ'] 
         [b, c, h, w] = y_start.shape
@@ -316,7 +319,7 @@ class GaussianDiffusion(nn.Module):
         loss_d = self.loss_func(noise, noise_recon)
 
         ## large diffusion process
-        y_t_recon = (x_noisy - (1 - sqrt_alpha_cumprod**2).sqrt() * noise_recon) * (1/sqrt_alpha_cumprod)
+        y_t_recon = self.q_sample_reverse(x_noisy, sqrt_alpha_cumprod.view(-1, 1, 1, 1), noise_recon) 
         residual_recon = self.model_D(
             torch.cat([y_t_recon.detach(),x_noisy], dim=1), sqrt_alpha_cumprod
         )
