@@ -237,6 +237,7 @@ class GaussianDiffusion(nn.Module):
             shape = x_in.shape
             Nt = torch.randn(shape, device=device)
             yt = x_in
+            ret_cond = yt
             ret_img = x_in
             seq_next = [-1] + list(seq[:-1])
             seq_rev = seq[::-1]
@@ -259,14 +260,14 @@ class GaussianDiffusion(nn.Module):
                         inner_t = (torch.ones(n) * seq_inner[j]).to(device)
                         inner_next_t = (torch.ones(n) * seq_next_inner[j]).to(device)
                         yt = self.p_sample_skip(self.model_d, Nt, x_in, inner_t, inner_next_t)
-
+                    ret_cond = torch.cat([ret_cond, yt], dim=0)
                 if i % sample_inter == 0:
                     # img = img
                     ret_img = torch.cat([ret_img, Nt], dim=0)
         if continous:
-            return ret_img
+            return ret_img, ret_cond
         else:
-            return ret_img[-1]
+            return ret_img[-1], ret_cond
 
     @torch.no_grad()
     def sample(self, batch_size=1, continous=False):
@@ -321,7 +322,7 @@ class GaussianDiffusion(nn.Module):
         ## large diffusion process
         y_t_recon = self.q_sample_reverse(x_noisy, sqrt_alpha_cumprod.view(-1, 1, 1, 1), noise_recon) 
         residual_recon = self.model_D(
-            torch.cat([y_t_recon.detach(),x_noisy], dim=1), sqrt_alpha_cumprod
+            torch.cat([y_t.detach(),x_noisy], dim=1), sqrt_alpha_cumprod
         )
         residual_gt = x_noisy - y_start
         loss_D = self.loss_func(residual_recon, residual_gt.detach())

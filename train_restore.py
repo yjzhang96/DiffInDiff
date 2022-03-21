@@ -204,7 +204,9 @@ if __name__ == "__main__":
                     Restore_img, '{}/{}_{}_Restore_process.png'.format(result_path, current_step, idx))
                 Metrics.save_img(
                     Metrics.tensor2img(visuals['Restore'][-1]), '{}/{}_{}_Restore.png'.format(result_path, current_step, idx))
-
+                Condition_img = Metrics.tensor2img(visuals['Cond'])
+                Metrics.save_img(
+                    Condition_img, '{}/{}_{}_Condition_process.png'.format(result_path, current_step, idx))
             Metrics.save_img(
                 HQ_img, '{}/{}_{}_HQ.png'.format(result_path, current_step, idx))
             Metrics.save_img(

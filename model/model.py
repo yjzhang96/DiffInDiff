@@ -79,10 +79,10 @@ class DDPM(BaseModel):
                 seq = [int(s) for s in list(seq)] 
             with torch.no_grad():
                 if isinstance(self.netG, nn.DataParallel):
-                    self.Restore = self.netG.module.skip_restore(
+                    self.Restore, self.cond_img = self.netG.module.skip_restore(
                         self.data['LQ'], seq, continous)
                 else:
-                    self.Restore = self.netG.skip_restore(
+                    self.Restore, self.cond_img = self.netG.skip_restore(
                         self.data['LQ'], seq, continous)
         elif self.opt['sample']['sample_type'] == "ddpm":
             with torch.no_grad():
@@ -127,6 +127,7 @@ class DDPM(BaseModel):
             out_dict['SAM'] = self.Restore.detach().float().cpu()
         else:
             out_dict['Restore'] = self.Restore.detach().float().cpu()
+            out_dict['Cond'] = self.cond_img.detach().float().cpu()
             # out_dict['INF'] = self.data['SR'].detach().float().cpu()
             out_dict['HQ'] = self.data['HQ'].detach().float().cpu()
             # if need_LR and 'LR' in self.data:
