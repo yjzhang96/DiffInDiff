@@ -210,18 +210,17 @@ class GaussianDiffusion(nn.Module):
         at = self.alphas_cumprod[(t+1).long()]
         at_next = self.alphas_cumprod[(next_t+1).long()]
         noise_level = torch.FloatTensor(
-                [self.sqrt_alphas_cumprod_prev[t.long()+1]]).repeat(n, 1).to(t.device)
+                [self.sqrt_alphas_cumprod_prev[t.long()]]).repeat(n, 1).to(t.device)
         et = denoise_fn(torch.cat([cond, xt],dim=1),noise_level)
-            
         x0_t = (xt - et * (1 - at).sqrt()) / at.sqrt()
         c1 = eta * ((1 - at / at_next) * (1 - at_next) / (1 - at)).sqrt()
         c2 = ((1 - at_next) - c1 ** 2).sqrt()
-        xt_next = at_next.sqrt() * x0_t + c1 * torch.randn_like(cond) + c2 * et
+        xt_next = at_next.sqrt() * x0_t + c1 * torch.randn_like(xt) + c2 * et
         return xt_next
 
     
     @torch.no_grad()
-    def p_sample_skiploop(self, x_in, seq, eta = 0, continous=False):
+    def p_sample_skiploop(self, x, seq, eta = 0, continous=False):
         device = self.betas.device
         sample_steps = len(seq)
         sample_inter = (1 | (sample_steps//10))
@@ -234,10 +233,12 @@ class GaussianDiffusion(nn.Module):
                 if i % sample_inter == 0:
                     ret_img = torch.cat([ret_img, img], dim=0)
         else:
+            x_in = x['LQ']
+            HQ = x['HQ']
             shape = x_in.shape
-            Nt = torch.randn(shape, device=device)
+            Dt = torch.randn(shape, device=device)
             yt = x_in
-            ret_cond = yt
+            ret_cond = x_in
             ret_img = x_in
             seq_next = [-1] + list(seq[:-1])
             seq_rev = seq[::-1]
@@ -247,23 +248,25 @@ class GaussianDiffusion(nn.Module):
             for i in tqdm(range(len(seq)), desc='sampling loop time step', total=sample_steps):
                 t = (torch.ones(n) * seq_rev[i]).to(device)
                 next_t = (torch.ones(n) * seq_next_rev[i]).to(device)
-                Nt = self.p_sample_skip(self.model_D, Nt, yt, t, next_t) 
-                
+                Dt = self.p_sample_skip(self.model_D, Dt, torch.cat([x_in, yt],dim=1), t, next_t) 
                 ## small diffusion to generate condition image
                 if i == (len(seq) -1):
                     ## the last loop, break
-                    ret_img = torch.cat([ret_img, Nt], dim=0)
+                    ret_img = torch.cat([ret_img, Dt], dim=0)
                 else:
                     seq_inner = seq_rev[i+1:]
                     seq_next_inner = seq_next_rev[i+1:]  
+                    dt = Dt
                     for j in tqdm(range(len(seq_inner)), desc='sampling inner loop', total=len(seq_inner)):
                         inner_t = (torch.ones(n) * seq_inner[j]).to(device)
                         inner_next_t = (torch.ones(n) * seq_next_inner[j]).to(device)
-                        yt = self.p_sample_skip(self.model_d, Nt, x_in, inner_t, inner_next_t)
-                    ret_cond = torch.cat([ret_cond, yt], dim=0)
+                        dt = self.p_sample_skip(self.model_d, dt, x_in, inner_t, inner_next_t)
+                    yt = dt + x_in
+                    ret_cond = torch.cat([ret_cond, x_in + dt], dim=0)
+                # import ipdb;ipdb.set_trace()
                 if i % sample_inter == 0:
                     # img = img
-                    ret_img = torch.cat([ret_img, Nt], dim=0)
+                    ret_img = torch.cat([ret_img, x_in + Dt], dim=0)
         if continous:
             return ret_img, ret_cond
         else:
@@ -310,9 +313,10 @@ class GaussianDiffusion(nn.Module):
             b, -1)
 
         noise = default(noise, lambda: torch.randn_like(y_start))
-        y_t = t/self.num_timesteps * x_in['LQ'] + (1 - t/self.num_timesteps) * x_in['HQ']
+        # y_t = t/self.num_timesteps * x_in['LQ'] + (1 - t/self.num_timesteps) * x_in['HQ']
+        Res = x_in['HQ'] - x_in['LQ']
         x_noisy = self.q_sample(
-            x_start=y_t, sqrt_alpha_cumprod=sqrt_alpha_cumprod.view(-1, 1, 1, 1), noise=noise)
+            x_start=Res, sqrt_alpha_cumprod=sqrt_alpha_cumprod.view(-1, 1, 1, 1), noise=noise)
 
         ## small diffusion process         
         noise_recon = self.model_d(
@@ -320,12 +324,14 @@ class GaussianDiffusion(nn.Module):
         loss_d = self.loss_func(noise, noise_recon)
 
         ## large diffusion process
-        y_t_recon = self.q_sample_reverse(x_noisy, sqrt_alpha_cumprod.view(-1, 1, 1, 1), noise_recon) 
-        residual_recon = self.model_D(
-            torch.cat([y_t.detach(),x_noisy], dim=1), sqrt_alpha_cumprod
+        res_recon = self.q_sample_reverse(x_noisy, sqrt_alpha_cumprod.view(-1, 1, 1, 1), noise_recon) 
+        y_recon = x_in['LQ'] + res_recon
+
+        noise_recon_D = self.model_D(
+            torch.cat([x_in['LQ'],y_recon,x_noisy], dim=1), sqrt_alpha_cumprod
         )
-        residual_gt = x_noisy - y_start
-        loss_D = self.loss_func(residual_recon, residual_gt.detach())
+        # residual_gt = y_t - x_in['HQ'] + noise
+        loss_D = self.loss_func(noise, noise_recon_D)
         return [loss_d, loss_D]
 
     def forward(self, x, *args, **kwargs):

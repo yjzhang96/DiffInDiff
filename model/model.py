@@ -80,7 +80,7 @@ class DDPM(BaseModel):
             with torch.no_grad():
                 if isinstance(self.netG, nn.DataParallel):
                     self.Restore, self.cond_img = self.netG.module.skip_restore(
-                        self.data['LQ'], seq, continous)
+                        self.data, seq, continous)
                 else:
                     self.Restore, self.cond_img = self.netG.skip_restore(
                         self.data['LQ'], seq, continous)

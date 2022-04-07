@@ -4,3 +4,6 @@ checkpoints/
 datasets/
 misc/
 *.png
+results/
+.log
+.pyc

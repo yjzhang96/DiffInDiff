@@ -1,5 +1,5 @@
 {
-    "name": "deblur_dnd",
+    "name": "deblur_dnd_Constant_Res",
     "phase": "train", // train or val
     "gpu_ids": [
         0,1
@@ -9,8 +9,8 @@
         "tb_logger": "tb_logger",
         "results": "results",
         "checkpoint": "checkpoint",
-        "resume_state": null
-        // "resume_state": "/home/yjz/Diffusion/Image-Super-Resolution-via-Iterative-Refinement/experiments/deblur_residual_220222_141117/checkpoint/Ilatest_Elatest" //pretrain model or training state
+        //"resume_state": null
+        "resume_state": "experiments/deblur_dnd_Constant_Res_220324_042320/checkpoint/Ilatest_Elatest" //pretrain model or training state
     },
     "datasets": {
         "train": {
@@ -62,9 +62,9 @@
         "model_D": {
             "finetune_norm": false,
             "unet": {
-                "in_channel": 6,
+                "in_channel": 9,
                 "out_channel": 3,
-                "inner_channel": 64,
+                "inner_channel": 32,
                 "channel_multiplier": [
                     1,
                     2,
