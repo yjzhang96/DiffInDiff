@@ -18,13 +18,13 @@ class RestoreDataset(Dataset):
         self.split = split
         if degrade_type:
             if degrade_type == 'blur':
-                self.degrade_index = 1
+                self.degrade_index = 0
             elif degrade_type == 'rain':
-                self.degrade_index = 2
+                self.degrade_index = 1
             elif degrade_type == 'noise':
-                self.degrade_index = 3
+                self.degrade_index = 2
             elif degrade_type == 'lowlight':
-                self.degrade_index = 4
+                self.degrade_index = 3
             else:
                 raise TypeError('degrade type {:s} not found'.format(degrade_type))
 
