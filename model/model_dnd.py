@@ -1,6 +1,5 @@
 import logging
 from collections import OrderedDict
-from sys import settrace
 
 import torch
 import torch.nn as nn
@@ -9,7 +8,7 @@ import numpy as np
 import model.networks as networks
 from .base_model import BaseModel
 logger = logging.getLogger('base')
-import model.losses as losses
+
 
 class DDPM(BaseModel):
     def __init__(self, opt):
@@ -19,14 +18,9 @@ class DDPM(BaseModel):
         self.schedule_phase = None
 
         # set loss and load resume state
-        # self.set_loss()
-        self.mse = nn.MSELoss()
-        self.criterion_char =losses.CharbonnierLoss()
-        self.criterion_edge = losses.EdgeLoss()
-
-        # self.set_new_noise_schedule(
-            # opt['model']['beta_schedule']['train'], schedule_phase='train')
-        
+        self.set_loss()
+        self.set_new_noise_schedule(
+            opt['model']['beta_schedule']['train'], schedule_phase='train')
         if self.opt['phase'] == 'train':
             self.netG.train()
             # self.netd.train()
@@ -55,30 +49,49 @@ class DDPM(BaseModel):
 
     def optimize_parameters(self):
         self.optim.zero_grad()
-        LQ = self.data['LQ']
-        type_index = self.data['index'][0]
-        HQ = self.data['HQ']
-        # import ipdb; ipdb.set_trace()
-
-        Restore = self.netG(LQ, type_index)
+        loss_d, loss_D = self.netG(self.data)
         # need to average in multi-gpu
-        # b, c, h, w = self.data['HQ'].shape
-        # loss_d = loss_d.sum()/int(b*c*h*w)
-        # loss_D = loss_D.sum()/int(b*c*h*w)
-        loss_char = self.criterion_char(Restore, HQ)
-        loss_edge = self.criterion_edge(Restore, HQ)
-        loss_tot = loss_char + 0.05*loss_edge
+        b, c, h, w = self.data['HQ'].shape
+        loss_d = loss_d.sum()/int(b*c*h*w)
+        loss_D = loss_D.sum()/int(b*c*h*w)
+        loss_tot = loss_d + loss_D
         loss_tot.backward()
         self.optim.step()
 
         # set log
-        self.log_dict['loss_char'] = loss_char.item()
-        self.log_dict['loss_edge'] = loss_edge.item()
+        self.log_dict['loss_d'] = loss_d.item()
+        self.log_dict['loss_D'] = loss_D.item()
 
     def test(self, continous=False):
         self.netG.eval()
-        with torch.no_grad():
-            self.Restore = self.netG(self.data['LQ'], self.data['index'][0])
+        if self.opt['sample']['sample_type'] == "generalized":
+            tot_timestep = self.opt['sample']['n_timestep']
+            if self.opt['sample']['skip_type'] == 'uniform':
+                skip = tot_timestep // self.opt['sample']['sample_step']
+                seq = range(0, tot_timestep, skip)
+            elif self.opt['sample']['sample_type'] == "quad":
+                seq = (
+                    np.linspace(
+                        0, np.sqrt(self.tot_timestep * 0.8), self.opt['sample']['sample_step']
+                    )
+                    ** 2
+                )
+                seq = [int(s) for s in list(seq)] 
+            with torch.no_grad():
+                if isinstance(self.netG, nn.DataParallel):
+                    self.Restore, self.cond_img = self.netG.module.skip_restore(
+                        self.data, seq, continous)
+                else:
+                    self.Restore, self.cond_img = self.netG.skip_restore(
+                        self.data['LQ'], seq, continous)
+        elif self.opt['sample']['sample_type'] == "ddpm":
+            with torch.no_grad():
+                if isinstance(self.netG, nn.DataParallel):
+                    self.Restore = self.netG.module.restore(
+                        self.data['LQ'], continous)
+                else:
+                    self.Restore = self.netG.restore(
+                        self.data['LQ'], continous)
         self.netG.train()
 
     def sample(self, batch_size=1, continous=False):
@@ -114,7 +127,12 @@ class DDPM(BaseModel):
             out_dict['SAM'] = self.Restore.detach().float().cpu()
         else:
             out_dict['Restore'] = self.Restore.detach().float().cpu()
+            out_dict['Cond'] = self.cond_img.detach().float().cpu()
+            # out_dict['INF'] = self.data['SR'].detach().float().cpu()
             out_dict['HQ'] = self.data['HQ'].detach().float().cpu()
+            # if need_LR and 'LR' in self.data:
+            #     out_dict['LR'] = self.data['LR'].detach().float().cpu()
+            # else:
             out_dict['LQ'] = self.data['LQ'].detach().float().cpu()
         return out_dict
 

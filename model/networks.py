@@ -82,9 +82,9 @@ def init_weights(net, init_type='kaiming', scale=1, std=0.02):
 # Generator
 def define_G(opt):
     model_opt = opt['model']
-    model_d_opt = opt['model']['model_d']
-    model_D_opt = opt['model']['model_D']
     if model_opt['which_model_G'] == 'dnd':
+        model_d_opt = opt['model']['model_d']
+        model_D_opt = opt['model']['model_D']
         from .DnD_modules import diffusion, unet
     
         if ('norm_groups' not in model_d_opt['unet']) or model_d_opt['unet']['norm_groups'] is None:
@@ -146,6 +146,22 @@ def define_G(opt):
             conditional=model_opt['diffusion']['conditional'],
             schedule_opt=model_opt['beta_schedule']['train']
         )
+    elif model_opt['which_model_G'] == 'MS':
+        from .MS_modules import MHunet 
+        if ('norm_groups' not in model_opt['unet']) or model_opt['unet']['norm_groups'] is None:
+            model_opt['unet']['norm_groups']=32
+        netG = MHunet.UNet(
+            in_channel=model_opt['unet']['in_channel'],
+            out_channel=model_opt['unet']['out_channel'],
+            degrade_num=model_opt['degrade_num'],
+            norm_groups=model_opt['unet']['norm_groups'],
+            inner_channel=model_opt['unet']['inner_channel'],
+            channel_mults=model_opt['unet']['channel_multiplier'],
+            attn_res=model_opt['unet']['attn_res'],
+            res_blocks=model_opt['unet']['res_blocks'],
+            dropout=model_opt['unet']['dropout'],
+            image_size=model_opt['diffusion']['image_size']
+        ) 
     else:
         raise NotImplementedError
     if opt['phase'] == 'train':
