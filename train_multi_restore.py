@@ -107,7 +107,7 @@ if __name__ == "__main__":
             noise_data_iter = iter(train_noise_loader)
             light_data_iter = iter(train_light_loader)
             for _ in range(iter_per_epoch):
-                random_type = random.randint(0,train_degrade_num)
+                random_type = random.randint(0,train_degrade_num-1)
                 if random_type == 0:
                     try:
                         train_data = next(blur_data_iter)
@@ -235,7 +235,7 @@ if __name__ == "__main__":
         idx = 0
         result_path = '{}'.format(opt['path']['results'])
         os.makedirs(result_path, exist_ok=True)
-        for _,  val_data in enumerate(val_loader):
+        for _,  val_data in enumerate(val_blur_loader):
             idx += 1
             diffusion.feed_data(val_data)
             diffusion.test(continous=True)
