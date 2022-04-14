@@ -23,6 +23,8 @@ class RestoreDataset(Dataset):
                 self.degrade_index = 2
             elif degrade_type == 'noise':
                 self.degrade_index = 3
+            elif degrade_type == 'lowlight':
+                self.degrade_index = 4
             else:
                 raise TypeError('degrade type {:s} not found'.format(degrade_type))
 
