@@ -147,10 +147,10 @@ def define_G(opt):
             schedule_opt=model_opt['beta_schedule']['train']
         )
     elif model_opt['which_model_G'] == 'MS':
-        from .MS_modules import MHunet, MIMOUNet 
+        from .MS_modules import MHunet, MIMOUNet, MIMO_MH 
         if ('norm_groups' not in model_opt['unet']) or model_opt['unet']['norm_groups'] is None:
             model_opt['unet']['norm_groups']=32
-        netG = MIMOUNet.MIMOUNet()
+        netG = MIMO_MH.MIMOUNet(degrade_num=model_opt['degrade_num'])
     else:
         raise NotImplementedError
     if opt['phase'] == 'train':
