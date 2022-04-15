@@ -4,6 +4,7 @@ from sys import settrace
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import os
 import numpy as np
 import model.networks as networks
@@ -62,32 +63,56 @@ class DDPM(BaseModel):
 
         Restore = self.netG(LQ, type_index)
         # need to average in multi-gpu
+        label_img2 = F.interpolate(HQ, scale_factor=0.5, mode='bilinear')
+        label_img4 = F.interpolate(HQ, scale_factor=0.25, mode='bilinear')
         # b, c, h, w = self.data['HQ'].shape
         # loss_d = loss_d.sum()/int(b*c*h*w)
         # loss_D = loss_D.sum()/int(b*c*h*w)
-        loss_char = self.criterion_char(Restore, HQ)
-        loss_edge = self.criterion_edge(Restore, HQ)
-        loss_tot = loss_char + 0.05*loss_edge
+        loss_char_0 = self.criterion_char(Restore[0], label_img4)
+        loss_char_1 = self.criterion_char(Restore[1], label_img2)
+        loss_char_2 = self.criterion_char(Restore[2], HQ)
+        loss_char = loss_char_0 + loss_char_1 + loss_char_2
+
+        loss_edge_0 = self.criterion_edge(Restore[0], label_img4)
+        loss_edge_1 = self.criterion_edge(Restore[1], label_img2)
+        loss_edge_2 = self.criterion_edge(Restore[2], HQ)
+        loss_edge = loss_edge_0 + loss_edge_1 + loss_edge_2
+
+        label_fft1 = torch.rfft(label_img4, signal_ndim=2, normalized=False, onesided=False)
+        pred_fft1 = torch.rfft(Restore[0], signal_ndim=2, normalized=False, onesided=False)
+        label_fft2 = torch.rfft(label_img2, signal_ndim=2, normalized=False, onesided=False)
+        pred_fft2 = torch.rfft(Restore[1], signal_ndim=2, normalized=False, onesided=False)
+        label_fft3 = torch.rfft(HQ, signal_ndim=2, normalized=False, onesided=False)
+        pred_fft3 = torch.rfft(Restore[2], signal_ndim=2, normalized=False, onesided=False)
+
+        f1 = self.mse(pred_fft1, label_fft1)
+        f2 = self.mse(pred_fft2, label_fft2)
+        f3 = self.mse(pred_fft3, label_fft3)
+        loss_fft = f1+f2+f3
+
+        loss_tot = loss_char + 0.05*loss_edge + 0.1 * loss_fft
         loss_tot.backward()
         self.optim.step()
 
         # set log
         self.log_dict['loss_char'] = loss_char.item()
         self.log_dict['loss_edge'] = loss_edge.item()
+        self.log_dict['loss_fft'] = loss_fft.item()
 
     def test(self, continous=False):
         self.netG.eval()
         with torch.no_grad():
-            self.Restore = self.netG(self.data['LQ'], self.data['index'][0])
+            Restore = self.netG(self.data['LQ'], self.data['index'][0])
+            self.Restore = Restore[-1]
         self.netG.train()
 
     def sample(self, batch_size=1, continous=False):
         self.netG.eval()
         with torch.no_grad():
             if isinstance(self.netG, nn.DataParallel):
-                self.Restore = self.netG.module.sample(batch_size, continous)
+                self.Restore = self.netG.module.sample(batch_size, continous)[-1]
             else:
-                self.Restore = self.netG.sample(batch_size, continous)
+                self.Restore = self.netG.sample(batch_size, continous)[-1]
         self.netG.train()
 
     def set_loss(self):

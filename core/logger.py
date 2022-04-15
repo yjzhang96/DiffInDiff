@@ -34,14 +34,19 @@ def parse(args):
     # set log directory
     if args.debug:
         opt['name'] = 'debug_{}'.format(opt['name'])
-    experiments_root = os.path.join(
-        'experiments', '{}_{}'.format(opt['name'], get_timestamp()))
-    opt['path']['experiments_root'] = experiments_root
+    if args.phase == 'train':
+        experiments_root = os.path.join(
+            'experiments', '{}_{}'.format(opt['name'], get_timestamp()))
+        opt['path']['experiments_root'] = experiments_root        
+    elif args.phase == 'val' or args.phase == 'test':
+        experiments_root = os.path.join(
+            'exp_results',opt['val_path']['model_name'], opt['val_path']['data_name'])
+        opt['path']['experiments_root'] = experiments_root
+        opt['path']['resume_state'] = opt['val_path']['load_state']
     for key, path in opt['path'].items():
         if 'resume' not in key and 'experiments' not in key:
             opt['path'][key] = os.path.join(experiments_root, path)
             mkdirs(opt['path'][key])
-
     # change dataset length limit
     opt['phase'] = phase
 

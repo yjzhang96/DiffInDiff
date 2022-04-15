@@ -79,7 +79,7 @@ if __name__ == "__main__":
                 val_noise_set, dataset_opt, phase)
             val_light_set = Data.create_dataset(dataset_opt, phase, 'lowlight')
             val_light_loader = Data.create_dataloader(
-                train_light_set, dataset_opt, phase)    
+                val_light_set, dataset_opt, phase)    
     logger.info('Initial Dataset Finished')
 
     # model
@@ -91,8 +91,6 @@ if __name__ == "__main__":
     current_epoch = diffusion.begin_epoch
     n_iter = opt['train']['n_iter']
     
-    iter_per_epoch = max(len(train_blur_loader),len(train_rain_loader),len(train_noise_loader))
-    print('There is {:d} iteration in one epoch:'.format(iter_per_epoch))
     if opt['path']['resume_state']:
         logger.info('Resuming training from epoch: {}, iter: {}.'.format(
             current_epoch, current_step))
@@ -100,6 +98,8 @@ if __name__ == "__main__":
     # diffusion.set_new_noise_schedule(
     #     opt['model']['beta_schedule'][opt['phase']], schedule_phase=opt['phase'])
     if opt['phase'] == 'train':
+        iter_per_epoch = max(len(train_blur_loader),len(train_rain_loader),len(train_noise_loader))
+        print('There is {:d} iteration in one epoch:'.format(iter_per_epoch))
         while current_step < n_iter:
             current_epoch += 1
             blur_data_iter = iter(train_blur_loader)
@@ -235,7 +235,7 @@ if __name__ == "__main__":
         idx = 0
         result_path = '{}'.format(opt['path']['results'])
         os.makedirs(result_path, exist_ok=True)
-        for _,  val_data in enumerate(val_blur_loader):
+        for _,  val_data in enumerate(val_rain_loader):
             idx += 1
             diffusion.feed_data(val_data)
             diffusion.test(continous=True)
@@ -256,13 +256,13 @@ if __name__ == "__main__":
             else:
                 # grid img
                 Restore_img = Metrics.tensor2img(visuals['Restore'])  # uint8
-                Metrics.save_img(
-                    Restore_img, '{}/{}_{}_Restore_process.png'.format(result_path, current_step, idx))
+                # Metrics.save_img(
+                #     Restore_img, '{}/{}_{}_Restore_process.png'.format(result_path, current_step, idx))
                 Metrics.save_img(
                     Metrics.tensor2img(visuals['Restore'][-1]), '{}/{}_{}_Restore.png'.format(result_path, current_step, idx))
-                Condition_img = Metrics.tensor2img(visuals['Cond'])
-                Metrics.save_img(
-                    Condition_img, '{}/{}_{}_Condition_process.png'.format(result_path, current_step, idx))
+                # Condition_img = Metrics.tensor2img(visuals['Cond'])
+                # Metrics.save_img(
+                #     Condition_img, '{}/{}_{}_Condition_process.png'.format(result_path, current_step, idx))
             Metrics.save_img(
                 HQ_img, '{}/{}_{}_HQ.png'.format(result_path, current_step, idx))
             Metrics.save_img(
